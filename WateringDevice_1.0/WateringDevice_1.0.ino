@@ -11,6 +11,8 @@ void setup()
     bool isInitialized = false;
     byte index = 0;
 
+    Serial.print("Format example: '2018-08-03 01:11:54'\n");
+    
     while(isInitialized == false)
     {
         Serial.print("Waiting for Date/Time initialization.\n");
@@ -66,40 +68,41 @@ void setup()
     strtokResult = strtok(NULL, ":");
     systime.tm_sec = atoi(strtokResult);
     
-    Serial.print("\nInitialization complete with these parameters:");
+    Serial.print("Initialization complete with following parameters:");
     char buf[maxTransmissionLengh];
     sprintf(buf, "%d-%d-%d %d:%d:%d\n", systime.tm_year, systime.tm_mon, systime.tm_mday, systime.tm_hour, systime.tm_min, systime.tm_sec);
     Serial.print(buf);
   
+    set_system_time(mktime(&systime));
 
-
-  // systime = mktime(&tmptr);
-  // set_system_time(systime);
-
-  // cli();//stop interrupts
-  // TCCR1A = 0;// set entire TCCR1A register to 0
-  // TCCR1B = 0;// same for TCCR1B
-  // TCNT1  = 0;//initialize counter value to 0
-  // // set compare match register for 1hz increments
-  // OCR1A = 15624;// = (16*10^6) / (1*1024) - 1 (must be <65536)
-  // // turn on CTC mode
-  // TCCR1B |= (1 << WGM12);
-  // // Set CS10 and CS12 bits for 1024 prescaler
-  // TCCR1B |= (1 << CS12) | (1 << CS10);  
-  // // enable timer compare interrupt
-  // TIMSK1 |= (1 << OCIE1A);
-  // sei();//allow interrupts
+    cli();//stop interrupts
+    TCCR1A = 0;// set entire TCCR1A register to 0
+    TCCR1B = 0;// same for TCCR1B
+    TCNT1  = 0;//initialize counter value to 0
+    // set compare match register for 1hz increments
+    OCR1A = 15624;// = (16*10^6) / (1*1024) - 1 (must be <65536)
+    // turn on CTC mode
+    TCCR1B |= (1 << WGM12);
+    // Set CS10 and CS12 bits for 1024 prescaler
+    TCCR1B |= (1 << CS12) | (1 << CS10);  
+    // enable timer compare interrupt
+    TIMSK1 |= (1 << OCIE1A);
+    sei();//allow interrupts
 }
 
 ISR(TIMER1_COMPA_vect)
-{//timer1 interrupt 1Hz
+{
   system_tick();
 }
 
-// the loop function runs over and over again forever
 void loop() 
 {
-  delay(4000);
-  
-Serial.print(".");
+    delay(4000);
+    
+    char buf[100];
+    
+    time_t t = time(NULL);
+    struct tm tm = *localtime(&t);
+    sprintf(buf, "%d-%d-%d %d:%d:%d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+    Serial.print(buf);
 }
