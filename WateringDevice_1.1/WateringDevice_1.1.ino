@@ -67,15 +67,13 @@ void setup()
     
     strtokResult = strtok(NULL, ":");
     systime.tm_sec = atoi(strtokResult);
+    
     systime.tm_isdst = false;
     
-    Serial.print("Initialization complete with following parameters:");
-    char buf[maxTransmissionLengh];
-    sprintf(buf, "%d-%d-%d %d:%d:%d\n", systime.tm_year, systime.tm_mon, systime.tm_mday, systime.tm_hour, systime.tm_min, systime.tm_sec);
-    Serial.print(buf);
-
     set_system_time(mktime(&systime));
-    
+    Serial.print("Initialization complete. Current time is:");
+    PrintCurrentDateTime();
+
     cli();//stop interrupts
     TCCR1A = 0;// set entire TCCR1A register to 0
     TCCR1B = 0;// same for TCCR1B
@@ -100,20 +98,15 @@ void loop()
 {
     delay(5000);
     
-    char buf[100];
-    
-    time_t t = time(NULL);
-    struct tm tm = *localtime(&t);
-    sprintf(buf, "%d-%d-%d %d:%d:%d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
-    Serial.print(buf);
+    PrintCurrentDateTime();
 }
 
-void PrintTimezone()
+void PrintCurrentDateTime()
 {
-    char buf[100];
-    time_t t = time(NULL);
-    struct tm *tm = localtime(&t);
-    strftime(buf,80,"%x %X %p | TZ:%Z | weekday: %w | %c\n", tm);
-    Serial.print(buf);
+  time_t t = time(NULL);
+  struct tm tm = *localtime(&t);
+  
+  char buf[100];
+  sprintf(buf, "%d-%d-%d %d:%d:%d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+  Serial.print(buf);
 }
-
