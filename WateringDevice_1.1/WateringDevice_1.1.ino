@@ -1,22 +1,39 @@
+/*
+Input format: '2018-08-04 12:48:55Evnt:2018-08-04 12:48:55Freq:1440Drtn:10'
+First timestamp: Initializa current time;
+Evnt: Timestamp of the next event;
+Freq: Event frequency in minutes;
+Drtn: Pump work time in seconds;
+*/
+ 
 #include <time.h>
+
+struct WateringEvent
+{
+    time_t EventDateTime; 
+    short FrequencyInMinutes;
+    byte DurationInSeconds;
+};
+
+struct WateringEvent *WateringEvents;
+
+int WateringEventsCount = 0;
 
 void setup() 
 {
     Serial.begin(9600);
+    ClearSerialBuffer();
       
-    const byte maxTransmissionLengh = 100;
+    const byte maxTransmissionLengh = 200;
     const char endOfLineCharacter = '\n';
-    char receivedCharacters[maxTransmissionLengh]; // an array to store the received data from Serial
+    char receivedCharacters[maxTransmissionLengh];
     char currentCharacter;
     bool isInitialized = false;
     byte index = 0;
-
-    Serial.print("Format example: '2018-08-03 01:11:54'\n");
     
     while(isInitialized == false)
     {
         Serial.print("Waiting for Date/Time initialization.\n");
-        
         while (Serial.available() > 0 && isInitialized == false)
         {
             currentCharacter = Serial.read();
@@ -46,7 +63,10 @@ void setup()
         delay(1000);
     }
     
-    Serial.print("Parsing result.\n");
+    Serial.print("Parsing input: '");
+    Serial.print(receivedCharacters);
+    Serial.print("'\n");
+    
     struct tm systime;
     char *strtokResult;
     
@@ -71,9 +91,15 @@ void setup()
     systime.tm_isdst = false;
     
     set_system_time(mktime(&systime));
-    Serial.print("Initialization complete. Current time is:");
+    Serial.print("Time initialization complete. Current time is: ");
     PrintCurrentDateTime();
-
+    
+    WateringEventsCount = GetEventsCount(receivedCharacters);
+    Serial.print("Events found: ");
+    Serial.print(WateringEventsCount);
+    Serial.print("\n");
+    
+    // Timer setup
     cli();//stop interrupts
     TCCR1A = 0;// set entire TCCR1A register to 0
     TCCR1B = 0;// same for TCCR1B
@@ -109,4 +135,26 @@ void PrintCurrentDateTime()
   char buf[100];
   sprintf(buf, "%d-%d-%d %d:%d:%d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
   Serial.print(buf);
+}
+
+int GetEventsCount(char *str)
+{
+    int count = 0;
+    const char *tmp = str;
+    while(tmp = strstr(tmp, "Evnt:"))
+    {
+        count++;
+        tmp++;
+    }
+    
+    return count;
+}
+
+void ClearSerialBuffer()
+{
+    Serial.flush();
+    while(Serial.available())
+    {
+        Serial.read();
+    }
 }
