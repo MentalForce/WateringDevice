@@ -39,7 +39,9 @@ void setup()
     
     WateringEventsCount = GetEventsCount(initializationMessage);
     free(initializationMessage);
-    
+
+    WateringEvents = (struct WateringEvent*) malloc(sizeof(WateringEvent) * WateringEventsCount);
+
     Serial.print("Events found: ");
     Serial.print(WateringEventsCount);
     Serial.print("\n");
