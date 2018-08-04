@@ -148,6 +148,7 @@ char* ReadInitializationMessage()
 tm ParseSystime(char *str)
 {
     char *s = (char*) malloc(strlen(str));
+    strcpy(s, str);
     
     struct tm systime;
     char *strtokResult;
@@ -173,6 +174,5 @@ tm ParseSystime(char *str)
     systime.tm_isdst = false;
     
     free(s);
-    
     return systime;
 }
