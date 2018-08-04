@@ -59,6 +59,8 @@ void setup()
     PrintCurrentDateTime();
     
     WateringEventsCount = GetEventsCount(initializationMessage);
+    free(initializationMessage);
+    
     Serial.print("Events found: ");
     Serial.print(WateringEventsCount);
     Serial.print("\n");
@@ -122,6 +124,7 @@ char* ReadInitializationMessage()
     char currentCharacter;
     bool transmissionComplete = false;
     byte index = 0;
+    int charactersCount = 0;
     
     while(transmissionComplete == false)
     {
@@ -130,6 +133,8 @@ char* ReadInitializationMessage()
         while (Serial.available() > 0 && transmissionComplete == false)
         {
             currentCharacter = Serial.read();
+            charactersCount++;
+            
             if(currentCharacter != endOfTransmissionCharacter)
             {
                 if(index > maxTransmissionLengh - 1)
@@ -156,5 +161,7 @@ char* ReadInitializationMessage()
         delay(1000);
     }
     
-    return receivedCharacters;
+    char *message = (char*) malloc(charactersCount);
+    strcpy(message, receivedCharacters);
+    return message;
 }
