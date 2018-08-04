@@ -1,3 +1,8 @@
+/*
+Program has known bug: it sets correct time only starting from second attempt. 
+First attempt always sets wrong time.
+*/
+
 #include <time.h>
 
 void setup() 
@@ -51,10 +56,10 @@ void setup()
     char *strtokResult;
     
     strtokResult = strtok(receivedCharacters, "-");
-    systime.tm_year = atoi(strtokResult);
+    systime.tm_year = atoi(strtokResult) - 1900;
     
     strtokResult = strtok(NULL, "-");
-    systime.tm_mon = atoi(strtokResult);
+    systime.tm_mon = atoi(strtokResult) - 1;
     
     strtokResult = strtok(NULL, " ");
     systime.tm_mday = atoi(strtokResult);
@@ -72,7 +77,7 @@ void setup()
     char buf[maxTransmissionLengh];
     sprintf(buf, "%d-%d-%d %d:%d:%d\n", systime.tm_year, systime.tm_mon, systime.tm_mday, systime.tm_hour, systime.tm_min, systime.tm_sec);
     Serial.print(buf);
-  
+    
     set_system_time(mktime(&systime));
 
     cli();//stop interrupts
@@ -97,7 +102,7 @@ ISR(TIMER1_COMPA_vect)
 
 void loop() 
 {
-    delay(4000);
+    delay(5000);
     
     char buf[100];
     
@@ -106,3 +111,6 @@ void loop()
     sprintf(buf, "%d-%d-%d %d:%d:%d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
     Serial.print(buf);
 }
+
+
+
