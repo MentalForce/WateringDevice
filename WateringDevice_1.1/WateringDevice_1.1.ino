@@ -31,28 +31,7 @@ void setup()
     Serial.print(initializationMessage);
     Serial.print("'\n");
     
-    struct tm systime;
-    char *strtokResult;
-    
-    strtokResult = strtok(initializationMessage, "-");
-    systime.tm_year = atoi(strtokResult) - 1900;
-    
-    strtokResult = strtok(NULL, "-");
-    systime.tm_mon = atoi(strtokResult) - 1;
-    
-    strtokResult = strtok(NULL, " ");
-    systime.tm_mday = atoi(strtokResult);
-    
-    strtokResult = strtok(NULL, ":");
-    systime.tm_hour = atoi(strtokResult);
-    
-    strtokResult = strtok(NULL, ":");
-    systime.tm_min = atoi(strtokResult);
-    
-    strtokResult = strtok(NULL, ":");
-    systime.tm_sec = atoi(strtokResult);
-    
-    systime.tm_isdst = false;
+    struct tm systime = ParseSystime(initializationMessage);
     
     set_system_time(mktime(&systime));
     Serial.print("Time initialization complete. Current time is: ");
@@ -164,4 +143,36 @@ char* ReadInitializationMessage()
     char *message = (char*) malloc(charactersCount);
     strcpy(message, receivedCharacters);
     return message;
+}
+
+tm ParseSystime(char *str)
+{
+    char *s = (char*) malloc(strlen(str));
+    
+    struct tm systime;
+    char *strtokResult;
+    
+    strtokResult = strtok(s, "-");
+    systime.tm_year = atoi(strtokResult) - 1900;
+    
+    strtokResult = strtok(NULL, "-");
+    systime.tm_mon = atoi(strtokResult) - 1;
+    
+    strtokResult = strtok(NULL, " ");
+    systime.tm_mday = atoi(strtokResult);
+    
+    strtokResult = strtok(NULL, ":");
+    systime.tm_hour = atoi(strtokResult);
+    
+    strtokResult = strtok(NULL, ":");
+    systime.tm_min = atoi(strtokResult);
+    
+    strtokResult = strtok(NULL, ":");
+    systime.tm_sec = atoi(strtokResult);
+    
+    systime.tm_isdst = false;
+    
+    free(s);
+    
+    return systime;
 }
