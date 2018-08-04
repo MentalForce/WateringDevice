@@ -1,5 +1,8 @@
 /*
-Input format: '2018-08-04 12:48:55Evnt:2018-08-04 12:48:55Freq:1440Drtn:10'
+Message longer than 64bytes should be transmitted by batches
+'|' - end of transmission character;
+
+Input format: '2018-08-04 12:48:55Evnt:2018-08-04 12:48:55Freq:1440Drtn:10|'
 First timestamp: Initializa current time;
 Evnt: Timestamp of the next event;
 Freq: Event frequency in minutes;
@@ -16,61 +19,22 @@ struct WateringEvent
 };
 
 struct WateringEvent *WateringEvents;
-
 int WateringEventsCount = 0;
 
 void setup() 
 {
     Serial.begin(9600);
-    ClearSerialBuffer();
       
-    const byte maxTransmissionLengh = 200;
-    const char endOfLineCharacter = '\n';
-    char receivedCharacters[maxTransmissionLengh];
-    char currentCharacter;
-    bool isInitialized = false;
-    byte index = 0;
-    
-    while(isInitialized == false)
-    {
-        Serial.print("Waiting for Date/Time initialization.\n");
-        while (Serial.available() > 0 && isInitialized == false)
-        {
-            currentCharacter = Serial.read();
-            if(currentCharacter != endOfLineCharacter)
-            {
-                if(index > maxTransmissionLengh - 1)
-                {
-                    Serial.print("Initialization failure. Date/Time message to long. Try again.\n");
-                    for(byte i = 0; i < maxTransmissionLengh; i++)
-                    {
-                        receivedCharacters[i] = '\0';
-                    }
-                    index = 0;
-                }
-                else
-                {
-                    receivedCharacters[index] = currentCharacter;
-                    index++;
-                }
-            }
-            else
-            {
-                isInitialized = true;
-                receivedCharacters[index] = '\0'; 
-            }
-        }
-        delay(1000);
-    }
+    char *initializationMessage = ReadInitializationMessage();
     
     Serial.print("Parsing input: '");
-    Serial.print(receivedCharacters);
+    Serial.print(initializationMessage);
     Serial.print("'\n");
     
     struct tm systime;
     char *strtokResult;
     
-    strtokResult = strtok(receivedCharacters, "-");
+    strtokResult = strtok(initializationMessage, "-");
     systime.tm_year = atoi(strtokResult) - 1900;
     
     strtokResult = strtok(NULL, "-");
@@ -94,7 +58,7 @@ void setup()
     Serial.print("Time initialization complete. Current time is: ");
     PrintCurrentDateTime();
     
-    WateringEventsCount = GetEventsCount(receivedCharacters);
+    WateringEventsCount = GetEventsCount(initializationMessage);
     Serial.print("Events found: ");
     Serial.print(WateringEventsCount);
     Serial.print("\n");
@@ -150,11 +114,47 @@ int GetEventsCount(char *str)
     return count;
 }
 
-void ClearSerialBuffer()
+char* ReadInitializationMessage()
 {
-    Serial.flush();
-    while(Serial.available())
+    const byte maxTransmissionLengh = 200;
+    const char endOfTransmissionCharacter = '|';
+    char receivedCharacters[maxTransmissionLengh];
+    char currentCharacter;
+    bool transmissionComplete = false;
+    byte index = 0;
+    
+    while(transmissionComplete == false)
     {
-        Serial.read();
+        Serial.print("Waiting for initialization.\n");
+        
+        while (Serial.available() > 0 && transmissionComplete == false)
+        {
+            currentCharacter = Serial.read();
+            if(currentCharacter != endOfTransmissionCharacter)
+            {
+                if(index > maxTransmissionLengh - 1)
+                {
+                    Serial.print("Initialization failure. Message to long. Try again.\n");
+                    for(byte i = 0; i < maxTransmissionLengh; i++)
+                    {
+                        receivedCharacters[i] = '\0';
+                    }
+                    index = 0;
+                }
+                else
+                {
+                    receivedCharacters[index] = currentCharacter;
+                    index++;
+                }
+            }
+            else
+            {
+                transmissionComplete = true;
+                receivedCharacters[index] = '\0'; 
+            }
+        }
+        delay(1000);
     }
+    
+    return receivedCharacters;
 }
