@@ -201,25 +201,24 @@ tm ParseSystime(char *str)
 void ParseWateringEvents(char *str)
 {
     char *s = (char*) malloc(strlen(str)+1);
-    char *tmp;
     strcpy(s, str);
 
-    // Rewind to the beginning of the event
-    strtok_r(s, "E", &tmp);
+    // Rewind current time initializer. Find beginning of the events section.
+    strtok(s, "E");
     
     for(int i = 0; i < WateringEventsCount; i++)
     {
         struct WateringEvent ve;
         char *token;
         
-        token = strtok_r(NULL, "F", &tmp);
+        token = strtok(NULL, "F");    
         struct tm t = ParseSystime(token);
         ve.EventUnixTime = mktime(&t);
     
-        token = strtok_r(NULL, "D", &tmp);
+        token = strtok(NULL, "D");     
         ve.FrequencyInMinutes = atoi(token);
         
-        token = strtok_r(NULL, "", &tmp);
+        token = strtok(NULL, "E");
         ve.DurationInSeconds = atoi(token);
 
         *(WateringEvents + i) = ve;
