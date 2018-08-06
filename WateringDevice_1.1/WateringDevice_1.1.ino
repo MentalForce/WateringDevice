@@ -32,10 +32,11 @@ void setup()
     Serial.print("'\n");
     
     struct tm systime = ParseSystime(initializationMessage);
-    
-    set_system_time(mktime(&systime));
+
+    time_t t = mktime(&systime);
+    set_system_time(t);
     Serial.print("Time initialization complete. Current time is: ");
-    PrintCurrentDateTime();
+    PrintDateTime(t);
     
     WateringEventsCount = GetEventsCount(initializationMessage);
     WateringEvents = (struct WateringEvent*) malloc(sizeof(WateringEvent) * WateringEventsCount);
@@ -43,7 +44,7 @@ void setup()
     
     free(initializationMessage);
   
-    Serial.print("Events found: ");
+    Serial.print("\nEvents found: ");
     Serial.print(WateringEventsCount);
     Serial.print("\n");
     
@@ -71,8 +72,10 @@ ISR(TIMER1_COMPA_vect)
 void loop() 
 {
     delay(5000);
-    
-    PrintCurrentDateTime();
+
+    Serial.print("Current time: ");
+    PrintDateTime(time(NULL));
+    Serial.print("\n");
     
     // DELETE
     for(int i = 0; i < WateringEventsCount; i++)
@@ -80,7 +83,7 @@ void loop()
         Serial.print("Event ");
         Serial.print(i);
         Serial.print(": Time: ");
-        Serial.print((WateringEvents + i)->EventUnixTime);
+        PrintDateTime((WateringEvents + i)->EventUnixTime);
         
         Serial.print(" Freq: ");
         Serial.print((WateringEvents + i)->FrequencyInMinutes);
@@ -93,13 +96,12 @@ void loop()
     // DELETE
 }
 
-void PrintCurrentDateTime()
+void PrintDateTime(time_t t)
 {
-  time_t t = time(NULL);
   struct tm tm = *localtime(&t);
   
   char buf[100];
-  sprintf(buf, "%d-%d-%d %d:%d:%d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+  sprintf(buf, "%d-%d-%d %d:%d:%d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
   Serial.print(buf);
 }
 
