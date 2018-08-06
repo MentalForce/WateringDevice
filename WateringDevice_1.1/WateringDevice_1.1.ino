@@ -1,21 +1,21 @@
 /*
 Message longer than 64bytes should be transmitted by batches
-'|' - end of transmission character;
 
-Input format: '2018-08-04 12:48:55Evnt:2018-08-04 12:48:55Freq:1440Drtn:10|'
+Input format: '2018-08-08 08:08:08E2018-09-09 19:19:19F1440D10|'
 First timestamp: Initializa current time;
-Evnt: Timestamp of the next event;
-Freq: Event frequency in minutes;
-Drtn: Pump work time in seconds;
+'E' - Timestamp of the next event;
+'F' - Event frequency in minutes;
+'D' - Pump work time in seconds;
+'|' - end of transmission character;
 */
  
 #include <time.h>
 
 struct WateringEvent
 {
-    time_t EventDateTime; 
-    short FrequencyInMinutes;
-    byte DurationInSeconds;
+    time_t EventUnixTime; 
+    int FrequencyInMinutes;
+    int DurationInSeconds;
 };
 
 struct WateringEvent *WateringEvents;
@@ -38,10 +38,11 @@ void setup()
     PrintCurrentDateTime();
     
     WateringEventsCount = GetEventsCount(initializationMessage);
-    free(initializationMessage);
-
     WateringEvents = (struct WateringEvent*) malloc(sizeof(WateringEvent) * WateringEventsCount);
-
+    ParseWateringEvents(initializationMessage);
+    
+    free(initializationMessage);
+  
     Serial.print("Events found: ");
     Serial.print(WateringEventsCount);
     Serial.print("\n");
@@ -72,6 +73,24 @@ void loop()
     delay(5000);
     
     PrintCurrentDateTime();
+    
+    // DELETE
+    for(int i = 0; i < WateringEventsCount; i++)
+    {
+        Serial.print("Event ");
+        Serial.print(i);
+        Serial.print(": Time: ");
+        Serial.print((WateringEvents + i)->EventUnixTime);
+        
+        Serial.print(" Freq: ");
+        Serial.print((WateringEvents + i)->FrequencyInMinutes);
+        
+        Serial.print(" Duration: ");
+        Serial.print((WateringEvents + i)->DurationInSeconds);
+        Serial.print("\n");
+        
+    }
+    // DELETE
 }
 
 void PrintCurrentDateTime()
@@ -88,7 +107,7 @@ int GetEventsCount(char *str)
 {
     int count = 0;
     const char *tmp = str;
-    while(tmp = strstr(tmp, "Evnt:"))
+    while(tmp = strstr(tmp, "E"))
     {
         count++;
         tmp++;
@@ -149,32 +168,62 @@ char* ReadInitializationMessage()
 
 tm ParseSystime(char *str)
 {
-    char *s = (char*) malloc(strlen(str));
+    char *s = (char*) malloc(strlen(str) + 1);
     strcpy(s, str);
     
     struct tm systime;
-    char *strtokResult;
+    char *strtokResult, *tmp;
     
-    strtokResult = strtok(s, "-");
+    strtokResult = strtok_r(s, "-", &tmp);
     systime.tm_year = atoi(strtokResult) - 1900;
     
-    strtokResult = strtok(NULL, "-");
+    strtokResult = strtok_r(NULL, "-", &tmp);
     systime.tm_mon = atoi(strtokResult) - 1;
     
-    strtokResult = strtok(NULL, " ");
+    strtokResult = strtok_r(NULL, " ", &tmp);
     systime.tm_mday = atoi(strtokResult);
     
-    strtokResult = strtok(NULL, ":");
+    strtokResult = strtok_r(NULL, ":", &tmp);
     systime.tm_hour = atoi(strtokResult);
     
-    strtokResult = strtok(NULL, ":");
+    strtokResult = strtok_r(NULL, ":", &tmp);
     systime.tm_min = atoi(strtokResult);
     
-    strtokResult = strtok(NULL, ":");
+    strtokResult = strtok_r(NULL, ":", &tmp);
     systime.tm_sec = atoi(strtokResult);
     
     systime.tm_isdst = false;
     
     free(s);
     return systime;
+}
+
+void ParseWateringEvents(char *str)
+{
+    char *s = (char*) malloc(strlen(str)+1);
+    char *tmp;
+    strcpy(s, str);
+
+    // Rewind to the beginning of the event
+    strtok_r(s, "E", &tmp);
+    
+    for(int i = 0; i < WateringEventsCount; i++)
+    {
+        struct WateringEvent ve;
+        char *token;
+        
+        token = strtok_r(NULL, "F", &tmp);
+        struct tm t = ParseSystime(token);
+        ve.EventUnixTime = mktime(&t);
+    
+        token = strtok_r(NULL, "D", &tmp);
+        ve.FrequencyInMinutes = atoi(token);
+        
+        token = strtok_r(NULL, "", &tmp);
+        ve.DurationInSeconds = atoi(token);
+
+        *(WateringEvents + i) = ve;
+    }
+    
+    free(s);
 }
