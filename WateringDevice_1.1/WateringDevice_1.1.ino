@@ -13,20 +13,22 @@ First timestamp: Initializa current time;
 
 struct WateringEvent
 {
-    time_t EventUnixTime; 
+    time_t NextEventUnixTime; 
     int FrequencyInSeconds;
     int DurationInSeconds;
 };
 
 struct WateringEvent *WateringEvents;
 int WateringEventsCount = 0;
+const byte WaterPumpPin = 7;
 
 void setup() 
 {
     Serial.begin(9600);
-      
-    char *initializationMessage = ReadInitializationMessage();
+
+    pinMode(WaterPumpPin, OUTPUT);
     
+    char *initializationMessage = ReadInitializationMessage();
     Serial.print("Parsing input: '");
     Serial.print(initializationMessage);
     Serial.print("'\n");
@@ -73,15 +75,23 @@ void loop()
 {
     time_t currentDateTime = time(NULL);
 
-        //DELETE
-        Serial.print("Current dateTime: ");
-        PrintDateTime(currentDateTime);
-        Serial.print("\n");
-        //DELETE
+    //DEBUG
+    Serial.print("Current time: ");
+    PrintDateTime(currentDateTime);
+    Serial.print("\n");
+
+    for(int i = 0; i < WateringEventsCount; i++)
+    {
+      Serial.print(i);
+      Serial.print(" Event will be triggered: ");
+      PrintDateTime((WateringEvents + i)->NextEventUnixTime);
+      Serial.print("\n");
+    }
+    //DEBUG
     
     ProcessEvents(currentDateTime);
 
-    delay(5000);
+    delay(10000);
 }
 
 void ProcessEvents(time_t currentUnixTime)
@@ -90,34 +100,16 @@ void ProcessEvents(time_t currentUnixTime)
     
     for(int i = 0; i < WateringEventsCount; i++)
     {
-        if(currentTime >= (WateringEvents + i)->EventUnixTime)
+        if(currentTime >= (WateringEvents + i)->NextEventUnixTime)
         {
-            //DELETE
-            PrintDateTime(time(NULL));
-            Serial.print(": ");
-            Serial.print(i);
-            Serial.print(" event started.\n");
-            //DELETE
-
-            //Turn on water pump
-            delay((WateringEvents + i)->DurationInSeconds * 1000);
-            //Turn off water pump
-
-            (WateringEvents + i)->EventUnixTime = 
-                (WateringEvents + i)->EventUnixTime +
+            EnableWaterPump((WateringEvents + i)->DurationInSeconds);
+            
+            (WateringEvents + i)->NextEventUnixTime = 
+                (WateringEvents + i)->NextEventUnixTime +
                 (WateringEvents + i)->FrequencyInSeconds +
                 (WateringEvents + i)->DurationInSeconds;
             
             currentTime = currentTime + (WateringEvents + i)->DurationInSeconds;
-            
-            //DELETE
-            PrintDateTime(time(NULL));
-            Serial.print(": ");
-            Serial.print(i);
-            Serial.print(" event completed. Next event datetime: ");
-            PrintDateTime((WateringEvents + i)->EventUnixTime);
-            Serial.print("\n");
-            //DELETE
         }
     }
 }
@@ -241,7 +233,7 @@ void ParseWateringEvents(char *str)
         
         token = strtok(NULL, "F");    
         struct tm t = ParseSystime(token);
-        ve.EventUnixTime = mktime(&t);
+        ve.NextEventUnixTime = mktime(&t);
     
         token = strtok(NULL, "D");     
         ve.FrequencyInSeconds = atoi(token);
@@ -253,4 +245,11 @@ void ParseWateringEvents(char *str)
     }
     
     free(s);
+}
+
+void EnableWaterPump(int durationInSeconds)
+{
+    digitalWrite(WaterPumpPin, HIGH);
+    delay(durationInSeconds * 1000);
+    digitalWrite(WaterPumpPin, LOW);
 }
