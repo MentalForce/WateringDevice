@@ -71,29 +71,48 @@ ISR(TIMER1_COMPA_vect)
 
 void loop() 
 {
-    delay(5000);
+    time_t currentDateTime = time(NULL);
 
-    Serial.print("Current time: ");
-    PrintDateTime(time(NULL));
-    Serial.print("\n");
-    
-    // DELETE
-    for(int i = 0; i < WateringEventsCount; i++)
-    {
-        Serial.print("Event ");
-        Serial.print(i);
-        Serial.print(": Time: ");
-        PrintDateTime((WateringEvents + i)->EventUnixTime);
-        
-        Serial.print(" Freq: ");
-        Serial.print((WateringEvents + i)->FrequencyInMinutes);
-        
-        Serial.print(" Duration: ");
-        Serial.print((WateringEvents + i)->DurationInSeconds);
+        //DELETE
+        Serial.print("Current dateTime: ");
+        PrintDateTime(currentDateTime);
         Serial.print("\n");
+        //DELETE
+    
+    ProcessEvents(currentDateTime);
+
+    delay(5000);
+}
+
+void ProcessEvents(time_t currentDateTime)
+{
+  for(int i = 0; i < WateringEventsCount; i++)
+    {
+      if(currentDateTime >= (WateringEvents + i)->EventUnixTime)
+      {
+        //DELETE
+        PrintDateTime(time(NULL));
+        Serial.print(": ");
+        Serial.print(i);
+        Serial.print(" event started.\n");
+        //DELETE
         
+        //Turn on water pump
+        delay((WateringEvents + i)->DurationInSeconds * 1000);
+        //Turn off water pump
+
+        (WateringEvents + i)->EventUnixTime = (WateringEvents + i)->EventUnixTime + (WateringEvents + i)->FrequencyInMinutes;
+
+        //DELETE
+        PrintDateTime(time(NULL));
+        Serial.print(": ");
+        Serial.print(i);
+        Serial.print(" event completed. Next event datetime: ");
+        PrintDateTime((WateringEvents + i)->EventUnixTime);
+        Serial.print("\n");
+        //DELETE
+      }
     }
-    // DELETE
 }
 
 void PrintDateTime(time_t t)
