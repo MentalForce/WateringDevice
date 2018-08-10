@@ -1,15 +1,15 @@
 /*
-Message longer than 64bytes should be transmitted by batches
-
-Input format: '2018-08-08 08:08:08E2018-09-09 19:19:19F1440D10|'
-First timestamp: Initializa current time;
-'E' - Timestamp of the next event;
-'F' - Event frequency in minutes;
-'D' - Pump work time in seconds;
-'|' - end of transmission character;
+  Message longer than 64bytes should be transmitted by batches
+  
+  Input format: 'E2018-09-09 19:19:19F1440D10|'
+  'E' - Timestamp of the next event;
+  'F' - Event frequency in minutes;
+  'D' - Pump work time in seconds;
+  '|' - end of transmission character;
 */
- 
+
 #include <time.h>
+#include <DS3232RTC.h>  
 
 struct WateringEvent
 {
@@ -22,9 +22,11 @@ struct WateringEvent *WateringEvents;
 int WateringEventsCount = 0;
 const byte WaterPumpPin = 7;
 
-void setup() 
+void setup()
 {
     Serial.begin(9600);
+
+    setSyncProvider(RTC.get);
 
     pinMode(WaterPumpPin, OUTPUT);
     
@@ -33,12 +35,9 @@ void setup()
     Serial.print(initializationMessage);
     Serial.print("'\n");
     
-    struct tm systime = ParseSystime(initializationMessage);
-
-    time_t t = mktime(&systime);
-    set_system_time(t);
-    Serial.print("Time initialization complete. Current time is: ");
-    PrintDateTime(t);
+    Serial.print("Parsing complete. Current time is: ");
+    PrintDateTime(now());
+    Serial.print("\n");
     
     WateringEventsCount = GetEventsCount(initializationMessage);
     WateringEvents = (struct WateringEvent*) malloc(sizeof(WateringEvent) * WateringEventsCount);
@@ -46,34 +45,14 @@ void setup()
     
     free(initializationMessage);
   
-    Serial.print("\nEvents found: ");
+    Serial.print("Events found: ");
     Serial.print(WateringEventsCount);
     Serial.print("\n");
-    
-    // Timer setup
-    cli();//stop interrupts
-    TCCR1A = 0;// set entire TCCR1A register to 0
-    TCCR1B = 0;// same for TCCR1B
-    TCNT1  = 0;//initialize counter value to 0
-    // set compare match register for 1hz increments
-    OCR1A = 15624;// = (16*10^6) / (1*1024) - 1 (must be <65536)
-    // turn on CTC mode
-    TCCR1B |= (1 << WGM12);
-    // Set CS10 and CS12 bits for 1024 prescaler
-    TCCR1B |= (1 << CS12) | (1 << CS10);  
-    // enable timer compare interrupt
-    TIMSK1 |= (1 << OCIE1A);
-    sei();//allow interrupts
-}
-
-ISR(TIMER1_COMPA_vect)
-{
-  system_tick();
 }
 
 void loop() 
 {
-    time_t currentDateTime = time(NULL);
+    time_t currentDateTime = now();
 
     //DEBUG
     Serial.print("Current time: ");
@@ -104,10 +83,7 @@ void ProcessEvents(time_t currentUnixTime)
         {
             EnableWaterPump((WateringEvents + i)->DurationInSeconds);
             
-            (WateringEvents + i)->NextEventUnixTime = 
-                (WateringEvents + i)->NextEventUnixTime +
-                (WateringEvents + i)->FrequencyInSeconds +
-                (WateringEvents + i)->DurationInSeconds;
+            (WateringEvents + i)->NextEventUnixTime = currentTime + (WateringEvents + i)->FrequencyInSeconds + (WateringEvents + i)->DurationInSeconds;
             
             currentTime = currentTime + (WateringEvents + i)->DurationInSeconds;
         }
@@ -116,10 +92,11 @@ void ProcessEvents(time_t currentUnixTime)
 
 void PrintDateTime(time_t t)
 {
-  struct tm tm = *localtime(&t);
+  tmElements_t tm;
+  breakTime(t, tm);
   
   char buf[100];
-  sprintf(buf, "%d-%d-%d %d:%d:%d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+  sprintf(buf, "%d-%02d-%02d %02d:%02d:%02d", tm.Year + 1970, tm.Month, tm.Day, tm.Hour, tm.Minute, tm.Second);
   Serial.print(buf);
 }
 
@@ -186,33 +163,31 @@ char* ReadInitializationMessage()
     return message;
 }
 
-tm ParseSystime(char *str)
+tmElements_t ParseSystime(char *str)
 {
     char *s = (char*) malloc(strlen(str) + 1);
     strcpy(s, str);
     
-    struct tm systime;
+    tmElements_t systime;
     char *strtokResult, *tmp;
     
     strtokResult = strtok_r(s, "-", &tmp);
-    systime.tm_year = atoi(strtokResult) - 1900;
+    systime.Year = atoi(strtokResult) - 1970;
     
     strtokResult = strtok_r(NULL, "-", &tmp);
-    systime.tm_mon = atoi(strtokResult) - 1;
+    systime.Month = atoi(strtokResult);
     
     strtokResult = strtok_r(NULL, " ", &tmp);
-    systime.tm_mday = atoi(strtokResult);
+    systime.Day = atoi(strtokResult);
     
     strtokResult = strtok_r(NULL, ":", &tmp);
-    systime.tm_hour = atoi(strtokResult);
+    systime.Hour = atoi(strtokResult);
     
     strtokResult = strtok_r(NULL, ":", &tmp);
-    systime.tm_min = atoi(strtokResult);
+    systime.Minute = atoi(strtokResult);
     
     strtokResult = strtok_r(NULL, ":", &tmp);
-    systime.tm_sec = atoi(strtokResult);
-    
-    systime.tm_isdst = false;
+    systime.Second = atoi(strtokResult);
     
     free(s);
     return systime;
@@ -232,8 +207,8 @@ void ParseWateringEvents(char *str)
         char *token;
         
         token = strtok(NULL, "F");    
-        struct tm t = ParseSystime(token);
-        ve.NextEventUnixTime = mktime(&t);
+        tmElements_t t = ParseSystime(token);
+        ve.NextEventUnixTime = makeTime(t);
     
         token = strtok(NULL, "D");     
         ve.FrequencyInSeconds = atoi(token);
