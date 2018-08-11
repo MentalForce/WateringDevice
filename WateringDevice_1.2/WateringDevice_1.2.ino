@@ -4,7 +4,7 @@
   Input format: 'E2018-09-09 19:19:19F1440D10|'
   'E' - Timestamp of the next event;
   'F' - Event frequency in minutes;
-  'D' - Pump work time in seconds;
+  'D' - Pump work time in seconds (0-255);
   '|' - end of transmission character;
 */
 
@@ -14,8 +14,8 @@
 struct WateringEvent
 {
     time_t NextEventUnixTime; 
-    int FrequencyInSeconds;
-    int DurationInSeconds;
+    unsigned long FrequencyInSeconds;
+    byte DurationInSeconds;
 };
 
 struct WateringEvent *WateringEvents;
@@ -54,19 +54,22 @@ void loop()
 {
     time_t currentDateTime = now();
 
-    //DEBUG
+    //INFO
     Serial.print("Current time: ");
     PrintDateTime(currentDateTime);
     Serial.print("\n");
-
     for(int i = 0; i < WateringEventsCount; i++)
     {
       Serial.print(i);
       Serial.print(" Event will be triggered: ");
       PrintDateTime((WateringEvents + i)->NextEventUnixTime);
-      Serial.print("\n");
+      Serial.print(" for '");
+      Serial.print((WateringEvents + i)->DurationInSeconds);
+      Serial.print("' seconds, with frequency of '");
+      Serial.print((WateringEvents + i)->FrequencyInSeconds);
+      Serial.print("' seconds.\n");
     }
-    //DEBUG
+    //INFO
     
     ProcessEvents(currentDateTime);
 
@@ -196,23 +199,33 @@ tmElements_t ParseSystime(char *str)
 void ParseWateringEvents(char *str)
 {
     char *s = (char*) malloc(strlen(str)+1);
+    char *token;
     strcpy(s, str);
 
-    // Rewind current time initializer. Find beginning of the events section.
-    strtok(s, "E");
-    
+    // Find beginning of the events section.
+    s = strstr(s,"E");
+    if(s == NULL)
+      {
+        Serial.print("Events not found.");
+        return;
+      }
+    s++;
+    token = strtok(s, "F");
+
     for(int i = 0; i < WateringEventsCount; i++)
     {
         struct WateringEvent ve;
-        char *token;
-        
-        token = strtok(NULL, "F");    
+
+        if( i != 0)
+          token = strtok(NULL, "F");    
+            
         tmElements_t t = ParseSystime(token);
         ve.NextEventUnixTime = makeTime(t);
-    
-        token = strtok(NULL, "D");     
-        ve.FrequencyInSeconds = atoi(token);
-        
+
+        char *p;
+        token = strtok(NULL, "D");
+        ve.FrequencyInSeconds = strtoul(token, &p, 10);
+     
         token = strtok(NULL, "E");
         ve.DurationInSeconds = atoi(token);
 
