@@ -86,7 +86,7 @@ void ProcessEvents(time_t currentUnixTime)
         {
             EnableWaterPump((WateringEvents + i)->DurationInSeconds);
             
-            (WateringEvents + i)->NextEventUnixTime = currentTime + (WateringEvents + i)->FrequencyInSeconds + (WateringEvents + i)->DurationInSeconds;
+            (WateringEvents + i)->NextEventUnixTime = (WateringEvents + i)->NextEventUnixTime + (WateringEvents + i)->FrequencyInSeconds;
             
             currentTime = currentTime + (WateringEvents + i)->DurationInSeconds;
         }
