@@ -93,14 +93,17 @@ void ProcessEvents(struct WateringEvent *wateringEvents, byte wateringEventsCoun
     {
         if(currentTime >= (wateringEvents + i)->NextEventUnixTime)
         {
-            currentTime += (wateringEvents + i)->DurationInSeconds;
+            struct WateringEvent we = *(wateringEvents + i);
+            currentTime += we.DurationInSeconds;
             
-            EnableWaterPump((wateringEvents + i)->DurationInSeconds);
-                        
-            (wateringEvents + i)->NextEventUnixTime = (wateringEvents + i)->NextEventUnixTime + (wateringEvents + i)->FrequencyInSeconds;
+            EnableWaterPump(we.DurationInSeconds);
             
-            int eepromAddress = sizeof(WateringEvent) * i + WateringEventsStartEepromAddress + 1;
-            EEPROM_Write(eepromAddress, (wateringEvents + i));
+            we.NextEventUnixTime += we.FrequencyInSeconds; 
+            
+            int eepromAddress = sizeof(WateringEvent) * i + WateringEventsStartEepromAddress;
+            if(i > 0)
+                eepromAddress++;
+            EEPROM_Write(eepromAddress, we);
         }
     }
 }
