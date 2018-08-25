@@ -81,8 +81,8 @@ void loop()
     free(wateringEvents);
     
     // Wait some time to finish UART transmission before sleep
-    delay(50);
-    LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
+    delay(70);
+    SleepOneMinute();
 }
 
 void ProcessEvents(struct WateringEvent *wateringEvents, byte wateringEventsCount, time_t currentUnixTime)
@@ -140,7 +140,7 @@ char* ReadInitializationMessage()
     byte attemptIndex = 0;
     int charactersCount = 0;
     
-    while(transmissionComplete == false || attemptIndex < initializationAttempsCount)
+    while(transmissionComplete == false && attemptIndex < initializationAttempsCount)
     {
         Serial.print("Waiting for initialization.\n");
         
@@ -299,4 +299,13 @@ struct WateringEvent* GetWateringEvents(byte wateringEventsCount)
         *(events + i) = we;
     }
     return events;
+}
+
+void SleepOneMinute()
+{
+    // 60 s / 4 s = 15
+    for (byte sleepCounter = 15; sleepCounter > 0; sleepCounter--)
+    {
+      LowPower.powerDown(SLEEP_4S, ADC_OFF, BOD_OFF);
+    }
 }
