@@ -10,6 +10,8 @@
 
 #include <time.h>
 #include <DS3232RTC.h>  
+#include <EEPROM.h>
+#include "LowPower.h"
 
 struct WateringEvent
 {
@@ -18,77 +20,87 @@ struct WateringEvent
     byte DurationInSeconds;
 };
 
-struct WateringEvent *WateringEvents;
-int WateringEventsCount = 0;
-const byte WaterPumpPin = 7;
+const byte WaterPumpPin = 9;
+const byte RTCPin = 10;
+const byte WateringEventsStartEepromAddress = 1; // Zero byte is keeping data of events count.
 
 void setup()
 {
     Serial.begin(9600);
 
-    setSyncProvider(RTC.get);
-
     pinMode(WaterPumpPin, OUTPUT);
+    pinMode(RTCPin, OUTPUT);
+    
+    // disable pull-up on I2C to save power
+    pinMode(A4, INPUT);
+    pinMode(A5, INPUT);
     
     char *initializationMessage = ReadInitializationMessage();
-    Serial.print("Parsing input: '");
-    Serial.print(initializationMessage);
-    Serial.print("'\n");
-    
-    Serial.print("Parsing complete. Current time is: ");
-    PrintDateTime(now());
-    Serial.print("\n");
-    
-    WateringEventsCount = GetEventsCount(initializationMessage);
-    WateringEvents = (struct WateringEvent*) malloc(sizeof(WateringEvent) * WateringEventsCount);
-    ParseWateringEvents(initializationMessage);
+    byte wateringEventsCount = GetEventsCount(initializationMessage);
+
+    if(wateringEventsCount > 0)
+    {
+        Serial.print("Events found: ");
+        Serial.print(wateringEventsCount);
+        Serial.print("\n");
+
+        SaveWateringEventsCount(wateringEventsCount);
+        ParseAndSaveWateringEvents(initializationMessage, wateringEventsCount);
+    }
     
     free(initializationMessage);
-  
-    Serial.print("Events found: ");
-    Serial.print(WateringEventsCount);
-    Serial.print("\n");
 }
 
 void loop() 
 {
-    time_t currentDateTime = now();
-
+    digitalWrite(RTCPin, HIGH);
+    time_t currentDateTime = RTC.get();
+    digitalWrite(RTCPin, LOW);
+    
     //INFO
     Serial.print("Current time: ");
     PrintDateTime(currentDateTime);
     Serial.print("\n");
-    for(int i = 0; i < WateringEventsCount; i++)
+    
+    byte wateringEventsCount = GetWateringEventsCount();
+    struct WateringEvent *wateringEvents = GetWateringEvents(wateringEventsCount);
+    for(int i = 0; i < wateringEventsCount; i++)
     {
       Serial.print(i);
       Serial.print(" Event will be triggered: ");
-      PrintDateTime((WateringEvents + i)->NextEventUnixTime);
+      PrintDateTime((wateringEvents + i)->NextEventUnixTime);
       Serial.print(" for '");
-      Serial.print((WateringEvents + i)->DurationInSeconds);
+      Serial.print((wateringEvents + i)->DurationInSeconds);
       Serial.print("' seconds, with frequency of '");
-      Serial.print((WateringEvents + i)->FrequencyInSeconds);
+      Serial.print((wateringEvents + i)->FrequencyInSeconds);
       Serial.print("' seconds.\n");
     }
     //INFO
     
-    ProcessEvents(currentDateTime);
-
-    delay(10000);
+    ProcessEvents(wateringEvents, wateringEventsCount, currentDateTime);
+    free(wateringEvents);
+    
+    // Wait some time to finish UART transmission before sleep
+    delay(50);
+    LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
 }
 
-void ProcessEvents(time_t currentUnixTime)
+void ProcessEvents(struct WateringEvent *wateringEvents, byte wateringEventsCount, time_t currentUnixTime)
 {
     time_t currentTime = currentUnixTime;
     
-    for(int i = 0; i < WateringEventsCount; i++)
+    for(int i = 0; i < wateringEventsCount; i++)
     {
-        if(currentTime >= (WateringEvents + i)->NextEventUnixTime)
+        if(currentTime >= (wateringEvents + i)->NextEventUnixTime)
         {
-            EnableWaterPump((WateringEvents + i)->DurationInSeconds);
+            currentTime += (wateringEvents + i)->DurationInSeconds;
             
-            (WateringEvents + i)->NextEventUnixTime = (WateringEvents + i)->NextEventUnixTime + (WateringEvents + i)->FrequencyInSeconds;
+            EnableWaterPump((wateringEvents + i)->DurationInSeconds);
+                        
+            (wateringEvents + i)->NextEventUnixTime = (wateringEvents + i)->NextEventUnixTime + (wateringEvents + i)->FrequencyInSeconds;
             
-            currentTime = currentTime + (WateringEvents + i)->DurationInSeconds;
+            int eepromAddress = sizeof(WateringEvent) * i + WateringEventsStartEepromAddress + 1;
+            EEPROM_Write(eepromAddress, (wateringEvents + i));
         }
     }
 }
@@ -118,15 +130,17 @@ int GetEventsCount(char *str)
 
 char* ReadInitializationMessage()
 {
+    const byte initializationAttempsCount = 10;
     const byte maxTransmissionLengh = 200;
     const char endOfTransmissionCharacter = '|';
     char receivedCharacters[maxTransmissionLengh];
     char currentCharacter;
     bool transmissionComplete = false;
     byte index = 0;
+    byte attemptIndex = 0;
     int charactersCount = 0;
     
-    while(transmissionComplete == false)
+    while(transmissionComplete == false || attemptIndex < initializationAttempsCount)
     {
         Serial.print("Waiting for initialization.\n");
         
@@ -158,6 +172,8 @@ char* ReadInitializationMessage()
                 receivedCharacters[index] = '\0'; 
             }
         }
+
+        attemptIndex++;
         delay(1000);
     }
     
@@ -196,12 +212,11 @@ tmElements_t ParseSystime(char *str)
     return systime;
 }
 
-void ParseWateringEvents(char *str)
+void ParseAndSaveWateringEvents(char *str, byte wateringEventsCount)
 {
     char *s = (char*) malloc(strlen(str)+1);
-    char *token;
     strcpy(s, str);
-
+    
     // Find beginning of the events section.
     s = strstr(s,"E");
     if(s == NULL)
@@ -210,9 +225,10 @@ void ParseWateringEvents(char *str)
         return;
       }
     s++;
-    token = strtok(s, "F");
 
-    for(int i = 0; i < WateringEventsCount; i++)
+    char *token = strtok(s, "F");
+    int eepromAddress = WateringEventsStartEepromAddress;
+    for(int i = 0; i < wateringEventsCount; i++)
     {
         struct WateringEvent ve;
 
@@ -229,7 +245,7 @@ void ParseWateringEvents(char *str)
         token = strtok(NULL, "E");
         ve.DurationInSeconds = atoi(token);
 
-        *(WateringEvents + i) = ve;
+        eepromAddress += EEPROM_Write(eepromAddress, ve) + 1;
     }
     
     free(s);
@@ -237,7 +253,50 @@ void ParseWateringEvents(char *str)
 
 void EnableWaterPump(int durationInSeconds)
 {
-    digitalWrite(WaterPumpPin, HIGH);
-    delay(durationInSeconds * 1000);
-    digitalWrite(WaterPumpPin, LOW);
+    //digitalWrite(WaterPumpPin, HIGH);
+    //delay(durationInSeconds * 1000);
+    //digitalWrite(WaterPumpPin, LOW);
+}
+
+template <class T> int EEPROM_Write(int ee, const T& value)
+{
+    const byte* p = (const byte*)(const void*)&value;
+    unsigned int i;
+    for (i = 0; i < sizeof(value); i++)
+          EEPROM.write(ee++, *p++);
+    return i;
+}
+
+template <class T> int EEPROM_Read(int ee, T& value)
+{
+    byte* p = (byte*)(void*)&value;
+    unsigned int i;
+    for (i = 0; i < sizeof(value); i++)
+          *p++ = EEPROM.read(ee++);
+    return i;
+}
+
+byte GetWateringEventsCount()
+{
+    byte ec;
+    EEPROM_Read(0, ec);
+    return ec;
+}
+
+void SaveWateringEventsCount(byte wateringEventsCount)
+{
+    EEPROM_Write(0, wateringEventsCount);
+}
+
+struct WateringEvent* GetWateringEvents(byte wateringEventsCount)
+{
+    struct WateringEvent *events = (struct WateringEvent*) malloc(sizeof(WateringEvent) * wateringEventsCount);
+    int eepromAddress = WateringEventsStartEepromAddress;
+    for(byte i = 0; i < wateringEventsCount; i++)
+    {
+        struct WateringEvent we;
+        eepromAddress += EEPROM_Read(eepromAddress, we) + 1;
+        *(events + i) = we;
+    }
+    return events;
 }
